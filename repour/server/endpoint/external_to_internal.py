@@ -35,9 +35,14 @@ async def translate_external_to_internal(external_git_url):
     """Logic from original maitai code to do this: found in GitUrlParser.java#generateInternalGitRepoName"""
 
     c = await config.get_configuration()
+
+    # Gerrit / GitLab
     git_backend = c.get("git_backend")
+
     if git_backend in c:
         git_server = c.get(git_backend).get("git_url_internal_template", None)
+        # c.get(git_backend).get("git_url_internal_template", None) --> "gerrit"."git_url_internal_template"
+        # or None, if not specified
     else:
         raise Exception(
             "git backend type " + git_backend + " missing in the configuration."
@@ -48,9 +53,13 @@ async def translate_external_to_internal(external_git_url):
     elif not git_server.endswith("/"):
         git_server = git_server + "/"
 
+    # SCP like: git format of the URL -- it's having ':' in the middle, which is however not followed by the port,
+    # for instance: git@github.com:myproject/myrepo.git
     is_scp_like = re.match(SCP_LIKE_URL_REGEX, external_git_url)
+    print("***** is SCP like: ", is_scp_like)
 
     result = urlparse(external_git_url)
+    print("***** URL parse result: ", result)
     scheme = result.scheme if not external_git_url.startswith("git@") else "git"
     path = result.path
 
@@ -61,17 +70,27 @@ async def translate_external_to_internal(external_git_url):
 
     if scheme not in acceptable_schemes:
         raise Exception("Scheme '{0}' not accepted!'".format(scheme))
+    # print("***** scheme: ", scheme)
 
     # list comprehension is to remove empty strings
     path_parts = [x for x in path.split("/") if x]
+    # print("***** path parts: ", path_parts)
 
     repository = None
 
     # extract repository part
     if path_parts[-1]:
         repository = re.sub(r"\.git$", "", path_parts[-1])
+    # print("***** repository", repository)
 
     organization = None
+
+    print("***** git backend: ", git_backend)
+    print("***** git server: ", git_server)
+    print("***** path parts: ", path_parts)
+
+    if len(path_parts) > 1:
+        print("***** path_parts[-2]: ", path_parts[-2])
 
     # if organization name is 'gerrit' (in gerrit) or the same as workspace group name (in gitlab), don't use it then
     if (
@@ -89,6 +108,9 @@ async def translate_external_to_internal(external_git_url):
             path_parts[-2] if not is_scp_like else path_parts[-2].split(":")[-1]
         )
 
+    org_res = organization if organization is not None else "None provided"
+    print("***** organization: ", org_res)
+
     if organization and repository:
         repo_name = organization + "/" + repository
     elif repository:
@@ -96,4 +118,7 @@ async def translate_external_to_internal(external_git_url):
     else:
         raise Exception("Could not translate the URL: No repository specified!")
 
-    return git_server + repo_name + ".git"
+    computed_internal = git_server + repo_name + ".git"
+    print("***** computed internal: ", computed_internal)
+    return computed_internal
+    # return git_server + repo_name + ".git"

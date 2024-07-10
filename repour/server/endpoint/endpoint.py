@@ -121,6 +121,7 @@ def validated_json_endpoint(
         if span_id == "":
             span_id = request.headers.get("parent-id", "").strip()
 
+        # Just for event-loop inside the repour
         callback_id = create_callback_id()
 
         asyncio.current_task().log_context = log_context
@@ -140,11 +141,13 @@ def validated_json_endpoint(
         log_util.add_update_mdc_key_value_in_task("span_id", span_id)
         log_util.add_update_mdc_key_value_in_task("traceparent", traceparent)
 
+        # Do not fully understand the magic behind this, but the callback_id computed above
+        # is used when around manipulations on event-loop regarding this method from this thread
         asyncio.current_task().callback_id = callback_id
 
         try:
             spec = await request.json()
-        except ValueError:
+        except ValueError:  # Parsing error
             logger.error(
                 "Rejected {method} {path}: body is not parsable as json".format(
                     method=request.method, path=request.path
@@ -172,7 +175,7 @@ def validated_json_endpoint(
             )
         try:
             validator(spec)
-        except voluptuous.MultipleInvalid as x:
+        except voluptuous.MultipleInvalid as x:  # Validation Error
             logger.error(
                 "Rejected {method} {path}: body failed input validation".format(
                     method=request.method, path=request.path
@@ -188,6 +191,7 @@ def validated_json_endpoint(
                 content_type="application/json",
                 text=json.dumps(obj=[e.__dict__ for e in x.errors], ensure_ascii=False),
             )
+        # Everything's ok, now actually go do the work (but log at first)
         logger.info(
             "Accepted {method} {path}: {params}".format(
                 method=request.method, path=request.path, params=spec
@@ -412,11 +416,15 @@ def validated_json_endpoint(
             )
 
             # trying
+            # Fill the actual trace context from the trace parent context
             ctx = TraceContextTextMapPropagator().extract(
                 carrier={"traceparent": traceparent}
             )
+
+            # Tracer is used to create new spans
             tracer = trace.get_tracer(__name__)
             with tracer.start_as_current_span(request.path, ctx) as span:
+                # Now finally we actually create the task at the event loop
                 callback_task = request.app.loop.create_task(do_callback(spec))
                 callback_task.log_context = log_context
                 callback_task.loggerName = asyncio.current_task().loggerName
@@ -427,7 +435,7 @@ def validated_json_endpoint(
                 if task_id:
                     callback_task.task_id = task_id
 
-                status = 202
+                status = 202  # 202, since the above created task is asynchronous and very probably long-running
                 obj = {"callback": {"id": callback_id}}
 
         else:

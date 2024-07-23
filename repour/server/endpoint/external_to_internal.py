@@ -83,8 +83,6 @@ async def translate_external_to_internal(external_git_url):
         repository = re.sub(r"\.git$", "", path_parts[-1])
     # print("***** repository", repository)
 
-    organization = None
-
     print("***** git backend: ", git_backend)
     print("***** git server: ", git_server)
     print("***** path parts: ", path_parts)
@@ -92,6 +90,7 @@ async def translate_external_to_internal(external_git_url):
     if len(path_parts) > 1:
         print("***** path_parts[-2]: ", path_parts[-2])
 
+    organization = None
     # if organization name is 'gerrit' (in gerrit) or the same as workspace group name (in gitlab), don't use it then
     if (
         len(path_parts) > 1

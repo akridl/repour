@@ -332,6 +332,7 @@ async def push(dir, remote, branch_or_tag, force=False):
 
 
 async def push_all(dir, remote, tags_also=False):
+    # Push everything, not only a single ref
     cmd = ["git", "push", "--all"]
 
     cmd.extend([remote, "--"])
@@ -371,6 +372,18 @@ async def push_with_tags(
 
     If branch is None, it is assumed that you only want to push the tags
     """
+
+    # Just find out whether we can set atomic push to truth:
+    #   1) user set the flag 'tryAtomic'
+    #   2) (git version >= 2.4)
+
+    # Method works like this:
+    # 1) No branch provided
+    #   push only tags: git push [--atomic] --tags
+
+    # 2) Branch provided
+    #   find all tags reachable from this ref (=branch in this case)
+    #   git push [--atomic] <remote> <branch> tag <reachable tags>
 
     async def do(atomic):
         if branch is None:
@@ -424,6 +437,7 @@ async def push_with_tags(
                 "The repository provider does not support atomic push. "
                 "There is a risk of tag/branch inconsistency."
             )
+            # Provider does not support atomic push, try again without atomic push
             await do(False)
         elif ignore_tag_already_exist_error and (
             "Updates were rejected because the tag already exists in the remote"

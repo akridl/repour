@@ -25,6 +25,10 @@ REQ_HISTOGRAM_TIME = Histogram(
 )
 
 
+# Cloning ONLY REF
+# Used by:
+#   1) POST /clone (when ref was given)
+#   2) POST /adjust (when pre-sync is enabled)
 async def push_sync_changes(
     work_dir, ref, git_backend, remote="origin", origin_remote="origin"
 ):
@@ -75,6 +79,7 @@ async def push_sync_changes(
 @time(REQ_TIME)
 @time(REQ_HISTOGRAM_TIME)
 async def clone(clonespec, repo_provider):
+    print('***** Handling POST /clone')
     if clonespec["type"] in scm_types:
         internal = await scm_types[clonespec["type"]](clonespec)
     else:
@@ -88,6 +93,7 @@ async def clone(clonespec, repo_provider):
 
 async def clone_git(clonespec):
     """Note: we ignore transforming git submodules into fat repository here since we'll rewrite history for the branch if we do that"""
+    print("***** cloning using git, clonsespec: ", clonespec)
     with asutil.TemporaryDirectory(suffix="git") as clone_dir:
         c = await config.get_configuration()
         git_backend = c.get("git_backend")
@@ -98,6 +104,7 @@ async def clone_git(clonespec):
                 "git backend type " + git_backend + " missing in the configuration."
             )
 
+        # Find out whether the internal repo is the new one -- some tag or branch exists
         new_internal_repo = await check_new_internal_repo(
             asutil.add_username_url(clonespec["targetRepoUrl"], git_user)
         )
@@ -142,6 +149,8 @@ async def check_new_internal_repo(git_url):
 
     returns: bool
     """
+    # Exists some tag or branch
+    print('***** is internal repo new? git_url: ' + git_url)
     with asutil.TemporaryDirectory(suffix="git") as temp_dir:
         await git.clone(temp_dir, git_url)  # Clone origin
 

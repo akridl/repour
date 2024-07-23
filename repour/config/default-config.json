@@ -51,7 +51,7 @@
     "git_url_internal_template": ""
   },
   "gitlab": {
-    "username": "",
+    "username": "user",
     "url": "",
     "token_path": "",
     "namespace_id": 0,

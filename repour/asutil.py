@@ -110,7 +110,7 @@ def expect_ok_closure(exc_type=exception.CommandError):
     Uses a custom logger name ('process') when printing live logs to the logging infrastructure.
     """
     # Special logger name used to print custom context in the output
-    logger_process = logging.getLogger("process")
+    logger_process = logging.getLogger("process")  # Logger used only for logs within the running command
 
     async def print_live_log(process):
         """
@@ -120,7 +120,7 @@ def expect_ok_closure(exc_type=exception.CommandError):
         BYTES_TO_READ = 5000
 
         stdout_data_ary = []
-        stderr_text = ""
+        stderr_text = ""  # We do not do anything with stderr, since it's a known issue
 
         while True:
             # Try to read up to BYTES_TO_READ to read in batch rather than reading line by line
@@ -135,7 +135,7 @@ def expect_ok_closure(exc_type=exception.CommandError):
                 data_second = await process.stdout.readline()
                 data += data_second
 
-            decoded = data.decode()
+            decoded = data.decode()  # Why is decoding here needed?
 
             if decoded == "":
                 # that means we reached EOF and process stopped
@@ -151,15 +151,16 @@ def expect_ok_closure(exc_type=exception.CommandError):
         return stdout_text, stderr_text
 
     async def expect_ok(
-        cmd,
-        desc="",
-        env=None,
+        cmd,  # Usually some git command, or 'java -version'
+        desc="",  # Description of the error
+        env=None,  # env variables to override
         stdout=None,
-        stderr="log_on_error",
-        cwd=None,
-        live_log=False,
-        print_cmd=False,
+        stderr="log_on_error",  # How to print to stderr
+        cwd=None,  # Current working directory
+        live_log=False,   # TODO
+        print_cmd=False,  # Print the command to be executed
     ):
+        # Returns stdout of the process, which was run
         """
         If stderr is set to 'log_on_error', the text in stderr will be logged as ERROR if the cmd return code is not zero
         If stderr is set to 'log_on_error_as_info', the text in stderr will be logged as a INFO if the cmd return code is not zero
@@ -169,6 +170,7 @@ def expect_ok_closure(exc_type=exception.CommandError):
         # load the system's env vars
         sub_env = os.environ.copy()
 
+        # Override environment
         if env:
             # Only partially override the existing environment
             sub_env.update(env)
@@ -176,6 +178,7 @@ def expect_ok_closure(exc_type=exception.CommandError):
         if print_cmd:
             logger.info("Running command: {}".format(cmd))
 
+        # Create executable process
         p = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.DEVNULL,
@@ -210,6 +213,7 @@ def expect_ok_closure(exc_type=exception.CommandError):
             elif stderr == "log":
                 subprocess_logger.error(stderr_text)
 
+        # process resulted in error (#? ~= 0), raise exc
         if not p.returncode == 0:
             raise exc_type(
                 desc=desc,
@@ -239,19 +243,26 @@ def add_username_url(url, username):
     """
 
     # If username is None or empty or url is in SCP-like format, do nothing
+    print(f'***** [add_username_url]: url: {url}, username: {username}')
     if not username or url.startswith("git@"):
+        print('***** username not blank or is SCP like, hence returning')
         return url
 
     parsed = urllib.parse.urlsplit(url)
+    print(f'***** parsed: scheme={parsed.scheme} path={parsed.path} username={parsed.username}')
 
     if parsed.username:
         # username info already in url, all good!
         return url
     else:
+        # Example of url, which gets here:
+        # https://gitlab.cee.redhat.com/pnc-stage-workspace/project/own_empty
         parsed_list = list(parsed)
+        print('***** parsed list: ', parsed_list)
         # first item is the protocol, second is the url name
         url_part = parsed_list[1]
         parsed_list[1] = username + "@" + url_part
+        print('***** edited parsed list: ', parsed_list)
 
         return urllib.parse.urlunsplit(parsed_list)
 
